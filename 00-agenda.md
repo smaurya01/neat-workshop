@@ -23,10 +23,6 @@ By the end of the workshop you will have:
 | 1:55 – 2:25 | 30 min | **App 2: two sources, two models (detection and pose), two streams** | [04-app2-dual-stream.md](04-app2-dual-stream.md) |
 | 2:25 – end | rest | **Questions and answers** | |
 
-> **Instructor tip:** an INT8 compile takes about 7 minutes and a BF16 compile about 9 minutes (measured on a 14-core, 16 GB host). Get attendees to
-> Step 3 (the compile) within about 10 minutes of session 2 and explain while it runs. Keep the prebuilt archives
-> (see [Prebuilt fallback](#prebuilt-fallback)) on hand so no one waits on a compile to start App 1.
-
 ---
 
 ## What runs where
@@ -177,13 +173,13 @@ workshop/
 └── prebuilt/                     ← compiled archives from the instructor, not in the repo (fallback)
 ```
 
-Every source file is also printed in full in its markdown file, so attendees can either use the
-folder or create the files themselves by copying from the page.
+Every source file is also printed in full in its markdown file, so you can either use the
+folder or create the files yourself by copying from the page.
 
 ### Prebuilt fallback
 
-If a compile fails or runs long, hand out the archives in `prebuilt/`. They were built with exactly
-the session 2 flow and validated with both apps on the DevKit:
+If your compile fails or runs long, use the prebuilt archives (ask the instructor for the `prebuilt/`
+folder). They were built with exactly the session 2 flow and validated with both apps on the DevKit:
 
 | File | Precision | Use |
 |---|---|---|
