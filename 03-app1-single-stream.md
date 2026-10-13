@@ -20,7 +20,7 @@ with detection boxes in Neat Insight.
                           │                                                                                │
                           │                         ┌─► "video"  VideoSender: HW H.264 encode → RTP/UDP ───┼──► Insight video  udp 9000+ch
  rtsp://…/src1  ───► source: HW H.264 decode ─► Branch                                                    │
-                          │      (NV12 frames)      └─► "model"  YOLO26n: EV74 pre → MLA → EV74 decode+NMS │
+                          │      (NV12 frames)      └─► "model"  YOLO26n: EV74 pre → MLA → EV74 box decode │
                           │                                         │                                     │
                           └─────────────────────────────────────────┼─────────────────────────────────────┘
                                                                     ▼  Output "detections"
@@ -49,8 +49,9 @@ frame size. If a value still contains a `<placeholder>`, the app stops with a cl
   ratio, pads with grey), `COCO_YOLO` normalization (pixel / 255). This must match how the model was
   calibrated in session 2, and it does: `compile.py` letterboxes and divides by 255 too.
 - `input_max_width/height` tells the preprocessor the largest frame it will receive.
-- **Postprocess** (EV74): `decode_type = YoloV26` turns the six raw heads into boxes and runs NMS.
-  `score_threshold`, `nms_iou_threshold` and `top_k` tune it.
+- **Postprocess** (EV74): `decode_type = YoloV26` turns the six raw heads into boxes. YOLO26's
+  one-to-one heads give one box per object, so no NMS runs. `score_threshold` and `top_k` tune it
+  (`nms_iou_threshold` only matters for NMS-based decoders such as `YoloV8`).
 - `pre_run_target / post_run_target = "EV74"` pins both steps on the vision DSP instead of letting
   Neat choose.
 
@@ -87,8 +88,9 @@ loop: run.pull("detections") → boxes → JSON → metadata.send_metadata(..., 
 run.close()
 ```
 
-`frame_id` travels with every frame through decode, branch and model. Sending it with the metadata
-lets Insight draw each box set on the exact video frame it belongs to.
+The metadata goes out with a timestamp of `-1`, so Insight draws each box set on the newest video
+frame when it arrives. `frame_id` travels with every frame through decode, branch and model, and
+identifies the frame in logs and diagnostics.
 
 ---
 
@@ -120,6 +122,7 @@ cd /workspace/workshop/app1-single-stream
 #include <chrono>
 #include <csignal>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <sstream>
@@ -195,7 +198,7 @@ neat::Model::Options model_options(const Config& cfg) {
   opt.preprocess.preset = neat::NormalizePreset::COCO_YOLO;
   opt.processcvu.pre_run_target = "EV74";
   opt.processcvu.post_run_target = "EV74";
-  // Postprocess: decode the raw YOLO26 heads + NMS on the device.
+  // Postprocess: decode the raw YOLO26 heads on the device (one-to-one heads: no NMS needed).
   opt.decode_type = neat::BoxDecodeType::YoloV26;
   opt.num_classes = 80;
   opt.score_threshold = cfg.score_threshold;
@@ -278,7 +281,8 @@ std::string to_json(const std::vector<neat::Box>& boxes, const Config& cfg) {
     const int h = std::min(cfg.height - y, static_cast<int>(b.y2 - b.y1));
     if (w <= 0 || h <= 0) continue;
     const char* label = (b.class_id >= 0 && b.class_id < 80) ? kCoco[b.class_id] : "object";
-    js << (n++ ? "," : "") << "{\"id\":\"obj_" << n << "\",\"label\":\"" << label
+    if (n++) js << ",";
+    js << "{\"id\":\"obj_" << n << "\",\"label\":\"" << label
        << "\",\"confidence\":" << b.score << ",\"bbox\":[" << x << "," << y << "," << w << ","
        << h << "]}";
   }
@@ -295,6 +299,7 @@ int main(int argc, char** argv) {
   std::signal(SIGINT, [](int) { g_stop = true; });
   std::signal(SIGTERM, [](int) { g_stop = true; });
   try {
+    std::cout << std::fixed << std::setprecision(1);   // fps=30.0
     const Config cfg = load_config(argc > 1 ? argv[1] : "app1.conf");
     neat::Model model(cfg.model_path, model_options(cfg));
     neat::Graph graph = make_graph(cfg, model);
@@ -326,7 +331,7 @@ int main(int argc, char** argv) {
       if (tensors.empty()) continue;
       const auto boxes =
           neat::decode_bbox_tensor(tensors.front(), cfg.width, cfg.height, 100, false).boxes;
-      // frame_id ties these boxes to the matching video frame in Insight.
+      // timestamp -1: Insight draws the boxes on the newest frame; frame_id is for diagnostics.
       metadata.send_metadata("object-detection", to_json(boxes, cfg), -1,
                              std::to_string(sample.frame_id), nullptr);
 
@@ -376,10 +381,10 @@ model_path=./models/yolo26n.compile_ready_mpk.tar.gz
 insight_host=<host-ip>
 channel=0
 
-# Decoded frame size and rate. Must match the stream (check with ffprobe)
+# Decoded frame size and rate. Must match the stream exactly (the 720p30 catalog videos are 30 fps)
 width=1280
 height=720
-fps=20
+fps=30
 
 score_threshold=0.4
 ```
@@ -411,21 +416,22 @@ Expected: `[100%] Built target app1_single_stream`.
 
 ## Run
 
-Make sure `src1` is playing in Insight (**RTSP Source** tab), then:
+Make sure `src1` is playing in Insight (**Streaming** tab), then:
 
 ```bash
 dk ./build/app1_single_stream app1.conf
 ```
 
-Expected output (Neat prints its pipelines first):
+Expected output (`dk` prefixes each line with `[DEVKIT][STDOUT]`; Neat prints its start-up lines and
+pipelines first):
 
 ```text
 source   : rtsp://<host-ip>:8554/src1
 model    : ./models/yolo26n.compile_ready_mpk.tar.gz
 insight  : <host-ip> channel 0 (video udp 9000, metadata udp 9100)
-frames=100 fps=14.3 boxes=6          ← the first window includes the start-up time
-frames=200 fps=20.0 boxes=6          ← steady state = the source frame rate (20 fps here)
-frames=300 fps=20.0 boxes=5
+frames=100 fps=17.6 boxes=9          ← the first window includes the start-up time
+frames=200 fps=30.2 boxes=8          ← steady state = the source frame rate (30 fps here)
+frames=300 fps=29.8 boxes=7
 ```
 
 Open Insight → **Video Viewer** → channel **0**. You should see the video with labelled boxes.
@@ -441,6 +447,7 @@ Open Insight → **Video Viewer** → channel **0**. You should see the video wi
 | `[warn] no result in 5 s` | The stream is not playing in Insight, or the URL uses `127.0.0.1` instead of the host IP |
 | Video in Insight, but no boxes | Same channel for video and metadata? Wrong `decode_type` for the model? Try `score_threshold=0.25` |
 | Boxes are shifted or scaled | `width`/`height` in the config do not match the real source resolution |
+| `[misconfig.media_caps] Two connected pipeline stages require incompatible media caps` | `fps` (or `width`/`height`) in the config does not match the stream. Neat 0.5.0 requires an exact match: use the 720p30 catalog variant, or set `fps` to your stream's rate |
 | `Exec format error` | You ran the binary in the container. Use `dk` to run it on the DevKit |
 
 ---
@@ -449,7 +456,9 @@ Open Insight → **Video Viewer** → channel **0**. You should see the video wi
 
 1. Publish only people and cars: filter on `b.class_id` (0 = person, 2 = car) in `to_json()`.
 2. Count objects per class each frame and print the counts every 100 frames.
-3. Point `model_path` at the zoo BF16 archive from session 1 and compare the reported fps.
+3. Point `model_path` at a BF16 detection archive (the zoo archive from session 1, or the prebuilt
+   `yolo26n-bf16…`) and compare the boxes. The app's fps stays at the source rate, so compare speed
+   with `model_info` instead.
 
 ## Checkpoint
 

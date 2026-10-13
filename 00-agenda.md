@@ -1,7 +1,7 @@
 # Building Edge AI Video Apps with SiMa Neat on Modalix — Workshop
 
 **Duration:** about 2.5 hours, hands-on  
-**Platform:** Modalix DevKit, board software 2.1.3, Neat SDK 2.1.3.0, Neat Library 0.4.0  
+**Platform:** Modalix DevKit, board software 2.1.3, Neat SDK 2.1.3.1, Neat Library 0.5.0  
 **Language:** C++ (everything here also has a Python equivalent, `pyneat`)
 
 By the end of the workshop you will have:
@@ -23,8 +23,8 @@ By the end of the workshop you will have:
 | 1:55 – 2:25 | 30 min | **App 2: two sources, two models (detection and pose), two streams** | [04-app2-dual-stream.md](04-app2-dual-stream.md) |
 | 2:25 – end | rest | **Questions and answers** | |
 
-> **Instructor tip:** an INT8 compile takes about 7 minutes and a BF16 compile about 9 minutes (measured on a 14-core, 16 GB host). Start the
-> compile at the beginning of session 2 and explain while it runs. Keep the prebuilt archives
+> **Instructor tip:** an INT8 compile takes about 7 minutes and a BF16 compile about 9 minutes (measured on a 14-core, 16 GB host). Get attendees to
+> Step 3 (the compile) within about 10 minutes of session 2 and explain while it runs. Keep the prebuilt archives
 > (see [Prebuilt fallback](#prebuilt-fallback)) on hand so no one waits on a compile to start App 1.
 
 ---
@@ -113,31 +113,32 @@ Open the folder `/workspace`. From here on, every command runs in the **VS Code 
 
 ```bash
 dk status                    # SSH status: reachable, Sync method: nfs
-neat                         # versions: core 0.4.0, Insight running
+neat                         # versions: core 0.5.0, Insight running
 ```
 
 Open Insight in a browser at **`https://<host-ip>:9900`** (HTTPS; accept the certificate warning).
 
-### 6. Fix the Model Compiler environment (SDK 2.1.3 only)
+### 6. Add `ultralytics` to the Model Compiler environment
 
-The model-compiler virtual environment in SDK 2.1.3 is missing two system libraries and `ultralytics`:
+The model-compiler virtual environment does not include `ultralytics`, which session 2 uses to
+export the models:
 
 ```bash
-sudo apt-get install -y libllvm18 libopenblas0
 source /sdk-extensions/model-compiler/bin/activate
-pip install ultralytics
-python -c "import afe; print('model compiler OK')"
+pip install "ultralytics==8.4.175"     # the version this workshop was tested with
+python -c "import afe, ultralytics; print('model compiler OK')"
 deactivate
 ```
 
-If `import afe` fails with `libLLVM.so.18.1: cannot open shared object file`, the `apt-get` step did not run.
+If `import afe` fails with `libLLVM.so.18.1: cannot open shared object file`, install the missing
+system libraries and try again: `sudo apt-get install -y libllvm18 libopenblas0`.
 
 ### 7. Start the test video streams in Insight
 
-1. **Media Library → Import Media → Catalog**: import a traffic video (for example
+1. **Media Sources → Import Media → Catalog**: import a traffic video (for example
    `parking_garage_cars` or `sj_highway`) and a people video (for example `person_gym_jumping`).
-   Pick the 720p H.264 variants.
-2. **RTSP Source**: assign the traffic video to `src1` and the people video to `src2`, then start both.
+   Pick the **720p30** H.264 variants (1280×720, 30 fps): the app configs expect 30 fps.
+2. **Streaming**: assign the traffic video to `src1` and the people video to `src2`, then start both.
 
 | Source | Content | Used by |
 |---|---|---|
@@ -149,7 +150,7 @@ The **Video Viewer** tab shows what the apps send back. Channel N there = video 
 You can check what is playing from the SDK terminal:
 
 ```bash
-curl -sk https://127.0.0.1:9900/api/mediasrc | python3 -m json.tool | grep -E '"index"|"state"|"rtsp"'
+curl -sk https://127.0.0.1:9900/api/mediasrc | python3 -c 'import json,sys;[print(s["index"],s["state"],s["file"]) for s in json.load(sys.stdin) if s["file"]]'
 ```
 
 > Use the **host IP** in RTSP URLs (`rtsp://<host-ip>:8554/...`), not `127.0.0.1`. The app runs on the
@@ -173,8 +174,7 @@ workshop/
 ├── model-compilation/            ← session 2: export_onnx.py, surgery.py, compile.py
 ├── app1-single-stream/           ← session 3: main.cpp, CMakeLists.txt, app1.conf
 ├── app2-dual-stream/             ← session 4: main.cpp, CMakeLists.txt, app2.conf
-├── prebuilt/                     ← compiled archives (fallback if a compile fails)
-└── _validation/                  ← instructor only: regenerate + validate the markdown
+└── prebuilt/                     ← compiled archives from the instructor, not in the repo (fallback)
 ```
 
 Every source file is also printed in full in its markdown file, so attendees can either use the
@@ -192,6 +192,7 @@ the session 2 flow and validated with both apps on the DevKit:
 | `yolo26n-bf16.compile_ready_mpk.tar.gz` | BF16 | Optional: compare with INT8 in App 1 |
 
 ```bash
+cd /workspace/workshop
 mkdir -p app1-single-stream/models app2-dual-stream/models
 cp prebuilt/yolo26n.compile_ready_mpk.tar.gz                                  app1-single-stream/models/
 cp prebuilt/yolo26n.compile_ready_mpk.tar.gz prebuilt/yolo26n-pose.compile_ready_mpk.tar.gz app2-dual-stream/models/

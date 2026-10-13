@@ -132,6 +132,7 @@ cd /workspace/workshop/app2-dual-stream
 #include <csignal>
 #include <cstring>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -319,7 +320,8 @@ std::string detection_json(const neat::Tensor& t, const StreamConfig& s, float m
     const int h = std::min(s.height - y, static_cast<int>(b.y2 - b.y1));
     if (w <= 0 || h <= 0) continue;
     const char* label = (b.class_id >= 0 && b.class_id < 80) ? kCoco[b.class_id] : "object";
-    js << (count++ ? "," : "") << "{\"id\":\"obj_" << count << "\",\"label\":\"" << label
+    if (count++) js << ",";
+    js << "{\"id\":\"obj_" << count << "\",\"label\":\"" << label
        << "\",\"confidence\":" << b.score << ",\"bbox\":[" << x << "," << y << "," << w << ","
        << h << "]}";
   }
@@ -410,6 +412,7 @@ int main(int argc, char** argv) {
   std::signal(SIGINT, [](int) { g_stop = true; });
   std::signal(SIGTERM, [](int) { g_stop = true; });
   try {
+    std::cout << std::fixed << std::setprecision(1);   // fps=30.0
     const Config cfg = load_config(argc > 1 ? argv[1] : "app2.conf");
 
     // Load every model first, then add every stream to ONE graph.
@@ -479,7 +482,7 @@ stream0.model_path=./models/yolo26n.compile_ready_mpk.tar.gz
 stream0.task=detection
 stream0.width=1280
 stream0.height=720
-stream0.fps=20
+stream0.fps=30                  # must match the stream's frame rate
 
 # Stream 1: pose estimation (YOLO26n-pose BF16)
 stream1.source=rtsp://<host-ip>:8554/src2
@@ -487,7 +490,7 @@ stream1.model_path=./models/yolo26n-pose.compile_ready_mpk.tar.gz
 stream1.task=pose
 stream1.width=1280
 stream1.height=720
-stream1.fps=20
+stream1.fps=30
 ```
 
 Replace every `<host-ip>`. Make sure `src1` (traffic) and `src2` (people) are playing in Insight, and that both models are in place:
@@ -507,19 +510,19 @@ cmake --build build
 dk ./build/app2_dual_stream app2.conf
 ```
 
-Expected:
+Expected (`dk` prefixes each line with `[DEVKIT][STDOUT]`; Neat's start-up lines come first):
 
 ```text
 stream 0: rtsp://<host-ip>:8554/src1 -> ./models/yolo26n.compile_ready_mpk.tar.gz -> Insight channel 0
 stream 1: rtsp://<host-ip>:8554/src2 -> ./models/yolo26n-pose.compile_ready_mpk.tar.gz -> Insight channel 1
-[stream 1 pose] frames=100 fps=14.3 results=2
-[stream 0 det ] frames=100 fps=14.2 results=4
-[stream 1 pose] frames=200 fps=20.0 results=2
-[stream 0 det ] frames=200 fps=20.0 results=4
+[stream 0 det ] frames=100 fps=18.0 results=7
+[stream 1 pose] frames=100 fps=17.8 results=1
+[stream 0 det ] frames=200 fps=31.6 results=7
+[stream 1 pose] frames=200 fps=30.2 results=1
 ...
 ^C
-[stream 1] stopped after 467 frames
-[stream 0] stopped after 468 frames
+[stream 0] stopped after 744 frames
+[stream 1] stopped after 729 frames
 ```
 
 Both streams run at the full source rate. `results` is the number of objects (stream 0) or people (stream 1) in the last frame.
@@ -535,17 +538,18 @@ with skeletons.
 |---|---|
 | Channel 1 shows video but no skeletons | Is `stream1.task=pose` set? Is the pose model on stream 1? Are there people in the video? |
 | Skeletons are offset from people | `stream1.width/height` do not match the source resolution |
+| `[misconfig.media_caps] … incompatible media caps` | A `streamN.fps` (or `width`/`height`) does not match that stream. Neat 0.5.0 requires an exact match |
 | `pull: ...` error on one stream | Read the message. The model path or source of that stream is usually wrong. The other stream stops too, by design |
-| Lower fps on both streams | Expected only when the MLA is saturated. At 2 × 20 fps with these models it is far below its limit (`model_info`: 550 + 199 fps) |
+| Lower fps on both streams | Expected only when the MLA is saturated. At 2 × 30 fps with these models it is far below its limit (`model_info`: 550 + 199 fps) |
 
 ---
 
 ## Exercises and discussion
 
-1. **Add a third stream**: add a `stream2.*` block (for example `src1` again, with the pose model) and
-   watch channel 2. No code changes are needed.
+1. **Add a third stream**: copy the whole `stream1.*` block as `stream2.*` (keep `stream2.task=pose`
+   and `stream2.fps`), point `stream2.source` at `src1`, and watch channel 2. No code changes are needed.
 2. **Swap precisions**: compile the pose model in INT8 (`--precision int8`) and compare keypoint
-   stability and fps with BF16.
+   stability with BF16 (the app runs at the source rate, so compare speed with `model_info`).
 3. **Trigger logic**: in `stream_worker`, print a message when a person's `left_wrist` is above the `nose`
    (a raised hand). This is the start of a real application.
 4. **Discussion**: why does one graph with N streams scale better than N separate processes? Think

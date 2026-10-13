@@ -58,17 +58,17 @@ opt.preprocess.color_convert.input_format  = neat::PreprocessColorFormat::NV12; 
 opt.preprocess.color_convert.output_format = neat::PreprocessColorFormat::RGB;   // what the net wants
 opt.preprocess.preset = neat::NormalizePreset::COCO_YOLO;             // pixel / 255
 
-opt.decode_type     = neat::BoxDecodeType::YoloV26;                   // box decode + NMS on device
+opt.decode_type     = neat::BoxDecodeType::YoloV26;                   // box decode on the device
 opt.num_classes     = 80;
 opt.score_threshold = 0.4f;
 
-neat::Model model("yolo26n_mpk.tar.gz", opt);
+neat::Model model("models/yolo26n.compile_ready_mpk.tar.gz", opt);
 ```
 
 - The **archive** holds the MLA program. The **options** describe the pre- and postprocessing
   around it. Neat places both on the EV74, so frames never take a round trip through the CPU.
 - `decode_type` picks the decoder that matches the network's raw outputs: `YoloV26` for
-  YOLO26 detection, `YoloV26Pose` for YOLO26 pose, `YoloV8`, `YoloX` and so on.
+  YOLO26 detection (its one-to-one heads need no NMS), `YoloV26Pose` for YOLO26 pose, `YoloV8`, `YoloX` and so on.
 - `model.input_specs()` / `model.output_specs()` describe the tensors. `model.benchmark()` measures
   latency and throughput on the device.
 
@@ -130,7 +130,8 @@ neat::MetadataSender metadata(meta_opt, &err_text);          // JSON over UDP to
 metadata.send_metadata("object-detection", json, -1, std::to_string(sample.frame_id), nullptr);
 ```
 
-The `frame_id` lets Insight draw each set of boxes on the exact video frame it belongs to.
+A timestamp of `-1` tells Insight to draw each set of boxes on the newest video frame when it
+arrives; `frame_id` identifies the frame in logs and diagnostics.
 
 ### 2.6 The development loop
 
@@ -164,6 +165,7 @@ Create `main.cpp`:
 // Usage:  ./model_info <model_mpk.tar.gz>
 #include <neat.h>
 
+#include <iomanip>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -191,7 +193,8 @@ int main(int argc, char** argv) {
 
     // Synthetic inputs, warm-up, then single-frame latency and pipelined throughput.
     const neat::BenchmarkReport report = model.benchmark(200);
-    std::cout << "latency_ms=" << report.latency_ms << "  fps=" << report.fps << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << "latency_ms=" << report.latency_ms
+              << "  fps=" << std::setprecision(1) << report.fps << std::endl;
     return 0;
   } catch (const std::exception& e) {
     std::cerr << "[error] " << e.what() << "\n";
@@ -223,7 +226,7 @@ session 2):
 
 ```bash
 mkdir -p models && cd models
-sima-cli download https://docs.sima.ai/pkg_downloads/SDK2.1.2/models/modalix/yolo26-detection/yolo26n-det-bf16-mla_tess-b1.tar.gz
+sima-cli download https://docs.sima.ai/pkg_downloads/SDK2.1.3/models/modalix/yolo26-detection/yolo26n-det-bf16-mla_tess-b1.tar.gz
 cd ..
 ```
 
@@ -237,7 +240,8 @@ cmake --build build
 dk ./build/model_info models/yolo26n-det-bf16-mla_tess-b1.tar.gz
 ```
 
-Expected output (Neat also prints its own benchmark summary):
+Expected output (`dk` prefixes each line with `[DEVKIT][STDOUT]`; Neat also prints its own start-up
+lines, an advisory `[WARN]` you can ignore, and a benchmark summary):
 
 ```text
 inputs:
@@ -250,7 +254,7 @@ outputs:
   [40, 40, 80]
   [20, 20, 80]
 ...
-latency_ms=8.04  fps=244.1
+latency_ms=8.10  fps=243.6
 ```
 
 ### 3.4 How to read it

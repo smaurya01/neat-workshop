@@ -19,8 +19,8 @@ app2-dual-stream/models/
 coco128/
 coco128.zip
 
-# --- Validation scratch output ---
-_validation/from-md/
+# --- Instructor tooling (doc sources, regenerate + validate scripts): not shipped ---
+_validation/
 
 # --- Python ---
 __pycache__/

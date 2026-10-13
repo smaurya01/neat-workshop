@@ -21,7 +21,7 @@ def main() -> None:
 
     model = YOLO(args.weights)
     # Static shape, opset 17, NO NMS: graph surgery cuts the decode tail off next,
-    # and Neat runs box decode + NMS on the device.
+    # and Neat decodes the boxes on the device.
     onnx_path = model.export(format="onnx", imgsz=args.imgsz, opset=17,
                              dynamic=False, simplify=True, nms=False)
     print(f"[export] wrote {Path(onnx_path).resolve()}")

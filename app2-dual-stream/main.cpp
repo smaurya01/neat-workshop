@@ -19,6 +19,7 @@
 #include <csignal>
 #include <cstring>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -206,7 +207,8 @@ std::string detection_json(const neat::Tensor& t, const StreamConfig& s, float m
     const int h = std::min(s.height - y, static_cast<int>(b.y2 - b.y1));
     if (w <= 0 || h <= 0) continue;
     const char* label = (b.class_id >= 0 && b.class_id < 80) ? kCoco[b.class_id] : "object";
-    js << (count++ ? "," : "") << "{\"id\":\"obj_" << count << "\",\"label\":\"" << label
+    if (count++) js << ",";
+    js << "{\"id\":\"obj_" << count << "\",\"label\":\"" << label
        << "\",\"confidence\":" << b.score << ",\"bbox\":[" << x << "," << y << "," << w << ","
        << h << "]}";
   }
@@ -297,6 +299,7 @@ int main(int argc, char** argv) {
   std::signal(SIGINT, [](int) { g_stop = true; });
   std::signal(SIGTERM, [](int) { g_stop = true; });
   try {
+    std::cout << std::fixed << std::setprecision(1);   // fps=30.0
     const Config cfg = load_config(argc > 1 ? argv[1] : "app2.conf");
 
     // Load every model first, then add every stream to ONE graph.

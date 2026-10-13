@@ -15,6 +15,7 @@
 #include <chrono>
 #include <csignal>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <sstream>
@@ -90,7 +91,7 @@ neat::Model::Options model_options(const Config& cfg) {
   opt.preprocess.preset = neat::NormalizePreset::COCO_YOLO;
   opt.processcvu.pre_run_target = "EV74";
   opt.processcvu.post_run_target = "EV74";
-  // Postprocess: decode the raw YOLO26 heads + NMS on the device.
+  // Postprocess: decode the raw YOLO26 heads on the device (one-to-one heads: no NMS needed).
   opt.decode_type = neat::BoxDecodeType::YoloV26;
   opt.num_classes = 80;
   opt.score_threshold = cfg.score_threshold;
@@ -173,7 +174,8 @@ std::string to_json(const std::vector<neat::Box>& boxes, const Config& cfg) {
     const int h = std::min(cfg.height - y, static_cast<int>(b.y2 - b.y1));
     if (w <= 0 || h <= 0) continue;
     const char* label = (b.class_id >= 0 && b.class_id < 80) ? kCoco[b.class_id] : "object";
-    js << (n++ ? "," : "") << "{\"id\":\"obj_" << n << "\",\"label\":\"" << label
+    if (n++) js << ",";
+    js << "{\"id\":\"obj_" << n << "\",\"label\":\"" << label
        << "\",\"confidence\":" << b.score << ",\"bbox\":[" << x << "," << y << "," << w << ","
        << h << "]}";
   }
@@ -190,6 +192,7 @@ int main(int argc, char** argv) {
   std::signal(SIGINT, [](int) { g_stop = true; });
   std::signal(SIGTERM, [](int) { g_stop = true; });
   try {
+    std::cout << std::fixed << std::setprecision(1);   // fps=30.0
     const Config cfg = load_config(argc > 1 ? argv[1] : "app1.conf");
     neat::Model model(cfg.model_path, model_options(cfg));
     neat::Graph graph = make_graph(cfg, model);
@@ -221,7 +224,7 @@ int main(int argc, char** argv) {
       if (tensors.empty()) continue;
       const auto boxes =
           neat::decode_bbox_tensor(tensors.front(), cfg.width, cfg.height, 100, false).boxes;
-      // frame_id ties these boxes to the matching video frame in Insight.
+      // timestamp -1: Insight draws the boxes on the newest frame; frame_id is for diagnostics.
       metadata.send_metadata("object-detection", to_json(boxes, cfg), -1,
                              std::to_string(sample.frame_id), nullptr);
 

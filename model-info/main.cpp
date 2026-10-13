@@ -3,6 +3,7 @@
 // Usage:  ./model_info <model_mpk.tar.gz>
 #include <neat.h>
 
+#include <iomanip>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -30,7 +31,8 @@ int main(int argc, char** argv) {
 
     // Synthetic inputs, warm-up, then single-frame latency and pipelined throughput.
     const neat::BenchmarkReport report = model.benchmark(200);
-    std::cout << "latency_ms=" << report.latency_ms << "  fps=" << report.fps << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << "latency_ms=" << report.latency_ms
+              << "  fps=" << std::setprecision(1) << report.fps << std::endl;
     return 0;
   } catch (const std::exception& e) {
     std::cerr << "[error] " << e.what() << "\n";

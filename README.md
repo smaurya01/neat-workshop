@@ -9,7 +9,7 @@ You will:
 2. Build a **single-stream** app: one video source → one model → live video with boxes in Neat Insight.
 3. Build a **dual-stream** app: two video sources → two models (detection and pose) → two live outputs.
 
-**Tested with:** Modalix DevKit, board software 2.1.3, Neat SDK 2.1.3.0, Neat Library 0.4.0.
+**Tested with:** Modalix DevKit, board software 2.1.3, Neat SDK 2.1.3.1, Neat Library 0.5.0.
 
 ## Start here
 
@@ -29,7 +29,7 @@ The guides expect the folder at `/workspace/workshop` inside the SDK container:
 
 ```bash
 cd /workspace
-git clone <this-repo-url> workshop
+git clone https://github.com/smaurya01/neat-workshop.git workshop
 ```
 
 ## Prebuilt models
@@ -45,8 +45,7 @@ If you can't compile the models yourself, ask the instructor for the prebuilt mo
 ├── model-info/            session 1: inspect and benchmark a model
 ├── model-compilation/     session 2: export_onnx.py, surgery.py, compile.py
 ├── app1-single-stream/    session 3: main.cpp, CMakeLists.txt, app1.conf
-├── app2-dual-stream/      session 4: main.cpp, CMakeLists.txt, app2.conf
-└── _validation/           maintainers: regenerate and validate the guides
+└── app2-dual-stream/      session 4: main.cpp, CMakeLists.txt, app2.conf
 ```
 
 Build output (`build/`), the model compilation working folder (`model-compilation/work/`) and model

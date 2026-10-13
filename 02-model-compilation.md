@@ -52,7 +52,7 @@ images from your domain. COCO128 (128 everyday images, 7 MB) is a good fit for C
 
 ```bash
 curl -L -o coco128.zip https://github.com/ultralytics/assets/releases/download/v0.0.0/coco128.zip
-unzip -q coco128.zip
+unzip -qo coco128.zip
 mkdir -p calib && cp coco128/images/train2017/*.jpg calib/
 ls calib | wc -l      # 128
 ```
@@ -91,7 +91,7 @@ def main() -> None:
 
     model = YOLO(args.weights)
     # Static shape, opset 17, NO NMS: graph surgery cuts the decode tail off next,
-    # and Neat runs box decode + NMS on the device.
+    # and Neat decodes the boxes on the device.
     onnx_path = model.export(format="onnx", imgsz=args.imgsz, opset=17,
                              dynamic=False, simplify=True, nms=False)
     print(f"[export] wrote {Path(onnx_path).resolve()}")
@@ -118,8 +118,9 @@ A stock YOLO export ends in a **decode tail**: concat, transpose, anchor maths, 
 CPU-style operations. If you compile the graph as is, the compiler splits it, and parts fall back to
 the ARM CPU (`.so` files in the archive), which is slow.
 
-The fix is to **cut the tail off and expose the raw heads**. Neat already decodes boxes and runs NMS on the EV74
-(`decode_type = YoloV26` / `YoloV26Pose`), so the network only needs to deliver raw head tensors:
+The fix is to **cut the tail off and expose the raw heads**. Neat already decodes the boxes on the EV74
+(`decode_type = YoloV26` / `YoloV26Pose`; YOLO26's one-to-one heads need no NMS), so the network
+only needs to deliver raw head tensors:
 
 ```text
 stock export : backbone → heads → [concat · transpose · decode · top-k] → 1 output
@@ -410,7 +411,7 @@ Start both compiles, **one after the other**, in the background:
   && python -u ../compile.py --onnx yolo26n-pose.compile_ready.onnx --precision bf16 --calib-dir calib \
 ) > compile.log 2>&1 &
 
-tail -f compile.log | grep --line-buffered '^\[compile\]'      # Ctrl+C stops watching, not the compile
+tail -f compile.log | grep --line-buffered -E '^\[compile\]|Error|Traceback'   # Ctrl+C stops watching, not the compile
 ```
 
 Expected, after about 7 + 9 minutes:
@@ -491,17 +492,25 @@ The pose model shows nine outputs. The keypoint heads are 64 channels wide, beca
 
 ```text
 outputs:
-  [80, 80, 4]     [40, 40, 4]     [20, 20, 4]       ← boxes
-  [80, 80, 1]     [40, 40, 1]     [20, 20, 1]       ← person score
-  [80, 80, 64]    [40, 40, 64]    [20, 20, 64]      ← 17 keypoints x 3 (+13 zero padding)
+  [80, 80, 4]          ← boxes
+  [40, 40, 4]
+  [20, 20, 4]
+  [80, 80, 1]          ← person score
+  [40, 40, 1]
+  [20, 20, 1]
+  [80, 80, 64]         ← 17 keypoints x 3 (+13 zero padding)
+  [40, 40, 64]
+  [20, 20, 64]
 ```
+
+(The INT8 detection archive prints its shapes with a leading batch dimension, e.g. `[1, 80, 80, 4]`.)
 
 Results measured on the Modalix DevKit (`Model::benchmark`, 200 samples):
 
 | Archive | Precision | Compile time | Latency | Throughput |
 |---|---|---|---|---|
 | yolo26n detection (this flow) | INT8 | 6 min 28 s | **5.45 ms** | **550 fps** |
-| yolo26n detection (this flow) | BF16 | 8 min 0 s | 9.79 ms | 224 fps |
+| yolo26n detection (`--precision bf16`, or the prebuilt `yolo26n-bf16…`) | BF16 | 8 min 0 s | 9.79 ms | 224 fps |
 | yolo26n-pose (this flow) | BF16 | 8 min 47 s | 10.27 ms | 199 fps |
 
 Same network, same calibration data: **INT8 runs about 2.5× faster than BF16** (550 vs 224 fps).
@@ -524,9 +533,9 @@ cp $W/compiled_bf16/yolo26n-pose.compile_ready/yolo26n-pose.compile_ready_mpk.ta
 | Symptom | Fix |
 |---|---|
 | `libLLVM.so.18.1: cannot open shared object file` | `sudo apt-get install -y libllvm18 libopenblas0` (agenda, step 6) |
-| `No module named 'ultralytics'` | `pip install ultralytics` inside the model-compiler venv |
-| Compile killed / out of memory | Run one compile at a time; `export SIMA_MLA_SIM_PARALLEL=4` (or lower) and retry |
-| `missing head tensors` / node not found in surgery | Not a YOLO26 export, or a different Ultralytics version renamed nodes. Open the ONNX in <https://netron.app> and check `/model.23/one2one_cv*` |
+| `No module named 'ultralytics'` | `pip install "ultralytics==8.4.175"` inside the model-compiler venv (agenda, step 6) |
+| Compile killed / out of memory | Run one compile at a time, close other memory-heavy programs, and give Docker more RAM if needed |
+| `cannot infer shape of /model.23/…`, or an onnxsim / checker error in surgery | Not a YOLO26 export, or a different Ultralytics version renamed nodes. Open the ONNX in <https://netron.app> and check `/model.23/one2one_cv*` |
 | `FAIL: graph is fragmented` | Something was left that the MLA cannot place. Read the compile log for the operator that fell back |
 | Detections are wrong or missing at runtime | Check the calibration images (real, from your domain), and that the app's `decode_type` matches the head (`YoloV26` / `YoloV26Pose`) |
 
