@@ -1,0 +1,45 @@
+# --- C++ build output (regenerate with cmake) ---
+build/
+**/build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# --- Model compilation working dir (weights, ONNX, COCO128, calib images, logs, compiled output) ---
+model-compilation/work/
+
+# --- Model archives copied into the apps (attendees copy them from prebuilt/ or their own compile) ---
+app1-single-stream/models/
+app2-dual-stream/models/
+
+# --- Model / dataset artifacts anywhere else ---
+*.pt
+*.onnx
+*.sima
+coco128/
+coco128.zip
+
+# --- Validation scratch output ---
+_validation/from-md/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# --- Logs ---
+*.log
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# --- Large binaries ---
+*.tar.gz
+*.mp4
