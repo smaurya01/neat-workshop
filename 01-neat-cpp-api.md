@@ -269,11 +269,4 @@ latency_ms=8.10  fps=243.6
 
 ---
 
-## Checkpoint
-
-- [ ] `cmake --build build` finishes with `Built target model_info`
-- [ ] `dk ./build/model_info ...` prints six outputs and an fps figure
-- [ ] You can explain the difference between `graph.add()` and `graph.connect()`
-- [ ] You know which `decode_type` goes with a YOLO26 detection model and which with a YOLO26 pose model
-
 [← Agenda](00-agenda.md) · [Next: Model compilation →](02-model-compilation.md)

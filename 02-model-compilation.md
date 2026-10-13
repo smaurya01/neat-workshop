@@ -539,11 +539,4 @@ cp $W/compiled_bf16/yolo26n-pose.compile_ready/yolo26n-pose.compile_ready_mpk.ta
 | `FAIL: graph is fragmented` | Something was left that the MLA cannot place. Read the compile log for the operator that fell back |
 | Detections are wrong or missing at runtime | Check the calibration images (real, from your domain), and that the app's `decode_type` matches the head (`YoloV26` / `YoloV26Pose`) |
 
-## Checkpoint
-
-- [ ] Both compiles print `PASS: single MLA program`
-- [ ] `model_info` shows 6 outputs for detection and 9 for pose
-- [ ] You can explain why we cut the decode tail off, and when you would choose BF16 over INT8
-- [ ] The archives are copied into `app1-single-stream/models` and `app2-dual-stream/models`
-
 [← Session 1: C++ API](01-neat-cpp-api.md) · [Agenda](00-agenda.md) · [Next: App 1 →](03-app1-single-stream.md)

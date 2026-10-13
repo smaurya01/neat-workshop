@@ -460,9 +460,4 @@ Open Insight → **Video Viewer** → channel **0**. You should see the video wi
    `yolo26n-bf16…`) and compare the boxes. The app's fps stays at the source rate, so compare speed
    with `model_info` instead.
 
-## Checkpoint
-
-- [ ] Live video with boxes on Insight channel 0 from the RTSP stream
-- [ ] You can name the hardware that runs each step: decode, preprocess, inference, box decode, encode
-
 [← Session 2: Model compilation](02-model-compilation.md) · [Agenda](00-agenda.md) · [Next: App 2 →](04-app2-dual-stream.md)

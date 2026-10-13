@@ -555,9 +555,4 @@ with skeletons.
 4. **Discussion**: why does one graph with N streams scale better than N separate processes? Think
    about decoder planning and the shared MLA.
 
-## Checkpoint
-
-- [ ] Two live channels in Insight: boxes on channel 0, skeletons on channel 1
-- [ ] You can explain how endpoint names keep the two pipelines apart in one graph
-
 [← Session 3: App 1](03-app1-single-stream.md) · [Agenda](00-agenda.md)
